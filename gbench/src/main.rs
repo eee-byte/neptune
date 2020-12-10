@@ -113,8 +113,9 @@ fn main() -> Result<(), Error> {
 
     let opts = Opts::from_args();
 
-    let kib = 1024 * 1024 * 4; // 4GiB
-                               // let kib = 1024 * 512; // 512MiB
+    //let kib = 1024 * 1024 * 4; // 4GiB
+    let kib = 1024 * 512; // 512MiB
+    //let kib = 1024 * 1024 * 32; // 432GiB
     let bytes = kib * 1024;
     let leaves = bytes / 32;
     let max_column_batch_size = opts.max_column_batch_size;

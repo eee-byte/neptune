@@ -10,6 +10,7 @@ use bellperson::bls::FrRepr;
 pub use error::Error;
 use ff::{Field, PrimeField, ScalarEngine};
 use generic_array::GenericArray;
+use log::info;
 
 /// Poseidon circuit
 pub mod circuit;
@@ -89,7 +90,7 @@ where
 // the script: https://extgit.iaik.tugraz.at/krypto/hadeshash/blob/master/code/scripts/calc_round_numbers.py
 fn round_numbers_base(arity: usize) -> (usize, usize) {
     let width = arity + 1;
-
+    info!("--------------- width:{:?}", width);
     let full_rounds = 8;
     let partial_rounds = match width {
         2 | 3 => 55,

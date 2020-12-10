@@ -2,6 +2,7 @@ use crate::matrix::{apply_matrix, vec_add};
 use crate::mds::MDSMatrices;
 use crate::quintic_s_box;
 use ff::{Field, ScalarEngine};
+use log::info;
 
 // - Compress constants by pushing them back through linear layers and through the identity components of partial layers.
 // - As a result, constants need only be added after each S-box.
@@ -26,7 +27,7 @@ pub(crate) fn compress_round_constants<E: ScalarEngine>(
     res.extend(round_keys(0));
 
     let unpreprocessed = partial_rounds - partial_preprocessed;
-
+    info!("--------------- unpreprocessed:{:?}", unpreprocessed);
     // Post S-box adds for the first set of full rounds should be 'inverted' from next round.
     // The final round is skipped when fully preprocessing because that value must be obtained from the result of preprocesing the partial rounds.
     let end = if unpreprocessed > 0 {
@@ -55,7 +56,7 @@ pub(crate) fn compress_round_constants<E: ScalarEngine>(
 
     let final_round = half_full_rounds + partial_rounds;
     let final_round_key = round_keys(final_round).to_vec();
-
+    info!("--------------- final_round:{:?}", final_round);
     // `round_acc` holds the accumulated result of inverting and adding subsequent round constants (in reverse).
     let round_acc = (0..partial_preprocessed)
         .map(|i| round_keys(final_round - i - 1))

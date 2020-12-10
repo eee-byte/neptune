@@ -11,6 +11,7 @@ use generic_array::{sequence::GenericSequence, typenum, ArrayLength, GenericArra
 use std::marker::PhantomData;
 use typenum::marker_traits::Unsigned;
 use typenum::*;
+use log::info;
 
 /// Available arities for the Poseidon hasher.
 pub trait Arity<T>: ArrayLength<T> {
@@ -177,7 +178,9 @@ where
         assert!(hash_type.is_supported());
         let arity = A::to_usize();
         let width = arity + 1;
-
+        info!("---------------new_with_strength_and_type-----------------");
+        info!("--------------- strength:{:?}", strength);
+        info!("--------------- width:{:?}", width);
         let mds_matrices = create_mds_matrices::<E>(width);
 
         let (full_rounds, partial_rounds) = round_numbers(arity, &strength);
@@ -191,7 +194,7 @@ where
             &mds_matrices,
             partial_rounds,
         );
-
+        info!("--------------- compressed_round_constants:{:?}", compressed_round_constants);
         let (pre_sparse_matrix, sparse_matrixes) =
             factor_to_sparse_matrixes::<E>(mds_matrices.m.clone(), partial_rounds);
 

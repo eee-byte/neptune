@@ -1,4 +1,5 @@
 use ff::{Field, ScalarEngine};
+use log::info;
 
 use crate::matrix;
 use crate::matrix::{
@@ -19,6 +20,7 @@ pub struct MDSMatrices<E: ScalarEngine> {
 
 pub fn create_mds_matrices<'a, E: ScalarEngine>(t: usize) -> MDSMatrices<E> {
     let m = generate_mds::<E>(t);
+    info!("----------- m:{:?}", m);
     derive_mds_matrices(m)
 }
 
@@ -27,7 +29,9 @@ pub fn derive_mds_matrices<'a, E: ScalarEngine>(m: Matrix<Scalar<E>>) -> MDSMatr
     let m_hat = minor::<E>(&m, 0, 0);
     let m_hat_inv = invert::<E>(&m_hat).unwrap(); // If this returns None, then `mds_matrix` was not correctly generated.
     let m_prime = make_prime::<E>(&m);
+    info!("----------- m_prime:{:?}", m_prime);
     let m_double_prime = make_double_prime::<E>(&m, &m_hat_inv);
+    info!("----------- m_double_prime:{:?}", m_double_prime);
 
     MDSMatrices {
         m,
