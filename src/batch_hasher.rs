@@ -5,7 +5,7 @@ use std::sync::{Arc, Mutex};
 #[cfg(feature = "gpu")]
 use crate::cl;
 use crate::error::Error;
-use crate::poseidon::SimplePoseidonBatchHasher;
+use crate::poseidon::{SimplePoseidonBatchHasher, HashMode};
 use crate::{Arity, BatchHasher, Strength, DEFAULT_STRENGTH};
 use bellperson::bls::Fr;
 use generic_array::GenericArray;
@@ -108,10 +108,10 @@ impl<A> BatchHasher<A> for Batcher<A>
 where
     A: Arity<Fr>,
 {
-    fn hash(&mut self, preimages: &[GenericArray<Fr, A>]) -> Result<Vec<Fr>, Error> {
+    fn hash(&mut self, preimages: &[GenericArray<Fr, A>], mode: HashMode) -> Result<Vec<Fr>, Error> {
         match self {
-            Batcher::GPU(batcher) => batcher.hash(preimages),
-            Batcher::CPU(batcher) => batcher.hash(preimages),
+            Batcher::GPU(batcher) => batcher.hash(preimages, mode),
+            Batcher::CPU(batcher) => batcher.hash(preimages, mode),
         }
     }
 
@@ -131,7 +131,7 @@ impl<A> BatchHasher<A> for NoGPUBatchHasher<A>
 where
     A: Arity<Fr>,
 {
-    fn hash(&mut self, _preimages: &[GenericArray<Fr, A>]) -> Result<Vec<Fr>, Error> {
+    fn hash(&mut self, _preimages: &[GenericArray<Fr, A>], mode: HashMode) -> Result<Vec<Fr>, Error> {
         unimplemented!();
     }
 

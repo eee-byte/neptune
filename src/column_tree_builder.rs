@@ -14,10 +14,11 @@ where
     ColumnArity: Arity<Fr>,
     TreeArity: Arity<Fr>,
 {
-    fn add_columns(&mut self, columns: &[GenericArray<Fr, ColumnArity>]) -> Result<(), Error>;
+    fn add_columns(&mut self, columns: &[GenericArray<Fr, ColumnArity>], mode: HashMode) -> Result<(), Error>;
     fn add_final_columns(
         &mut self,
         columns: &[GenericArray<Fr, ColumnArity>],
+        mode: HashMode
     ) -> Result<(Vec<Fr>, Vec<Fr>), Error>;
 
     fn reset(&mut self);
@@ -54,7 +55,7 @@ where
 
         match self.column_batcher {
             Some(ref mut batcher) => {
-                batcher.hash_into_slice(&mut self.data[start..start + column_count], columns)?;
+                batcher.hash_into_slice(&mut self.data[start..start + column_count], columns, mode)?;
             }
             None => columns.iter().enumerate().for_each(|(i, column)| {
                 self.data[start + i] =
@@ -70,10 +71,11 @@ where
     fn add_final_columns(
         &mut self,
         columns: &[GenericArray<Fr, ColumnArity>],
+        mode: HashMode
     ) -> Result<(Vec<Fr>, Vec<Fr>), Error> {
-        self.add_columns(columns)?;
+        self.add_columns(columns, mode)?;
 
-        let (base, tree) = self.tree_builder.add_final_leaves(&self.data)?;
+        let (base, tree) = self.tree_builder.add_final_leaves(&self.data, mode)?;
         self.reset();
 
         Ok((base, tree))
@@ -154,11 +156,12 @@ where
     pub fn compute_uniform_tree_root(
         &mut self,
         column: GenericArray<Fr, ColumnArity>,
+        mode: HashMode
     ) -> Result<Fr, Error> {
         // All the leaves will be the same.
-        let element = Poseidon::new_with_preimage(&column, &self.column_constants).hash();
+        let element = Poseidon::new_with_preimage(&column, &self.column_constants).hash(mode);
 
-        self.tree_builder.compute_uniform_tree_root(element)
+        self.tree_builder.compute_uniform_tree_root(element, mode)
     }
 }
 

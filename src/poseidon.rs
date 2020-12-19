@@ -568,7 +568,7 @@ where
     fn hash(&mut self, preimages: &[GenericArray<Fr, A>], mode: HashMode) -> Result<Vec<Fr>, Error> {
         Ok(preimages
             .iter()
-            .map(|preimage| Poseidon::new_with_preimage(&preimage, &self.constants).hash(mode.clone()))
+            .map(|preimage| Poseidon::new_with_preimage(&preimage, &self.constants).hash(mode))
             .collect())
     }
 

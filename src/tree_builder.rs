@@ -1,6 +1,6 @@
 use crate::batch_hasher::{Batcher, BatcherType};
 use crate::error::Error;
-use crate::poseidon::{Poseidon, PoseidonConstants};
+use crate::poseidon::{Poseidon, PoseidonConstants, HashMode};
 use crate::{Arity, BatchHasher};
 use bellperson::bls::{Bls12, Fr};
 use ff::Field;
@@ -13,7 +13,7 @@ where
     TreeArity: Arity<Fr>,
 {
     fn add_leaves(&mut self, leaves: &[Fr]) -> Result<(), Error>;
-    fn add_final_leaves(&mut self, leaves: &[Fr]) -> Result<(Vec<Fr>, Vec<Fr>), Error>;
+    fn add_final_leaves(&mut self, leaves: &[Fr], mode: HashMode) -> Result<(Vec<Fr>, Vec<Fr>), Error>;
 
     fn reset(&mut self);
 }
@@ -50,10 +50,10 @@ where
         Ok(())
     }
 
-    fn add_final_leaves(&mut self, leaves: &[Fr]) -> Result<(Vec<Fr>, Vec<Fr>), Error> {
+    fn add_final_leaves(&mut self, leaves: &[Fr], mode: HashMode) -> Result<(Vec<Fr>, Vec<Fr>), Error> {
         self.add_leaves(leaves)?;
 
-        let res = self.build_tree(self.rows_to_discard);
+        let res = self.build_tree(self.rows_to_discard, mode);
         self.reset();
 
         res
@@ -116,7 +116,7 @@ where
         Ok(builder)
     }
 
-    pub fn build_tree(&mut self, rows_to_discard: usize) -> Result<(Vec<Fr>, Vec<Fr>), Error> {
+    pub fn build_tree(&mut self, rows_to_discard: usize, mode: HashMode) -> Result<(Vec<Fr>, Vec<Fr>), Error> {
         let final_tree_size = self.tree_size(rows_to_discard);
         let intermediate_tree_size = self.tree_size(0) + self.leaf_count;
         let arity = TreeArity::to_usize();
@@ -145,7 +145,7 @@ where
                         let batch_size = (batch_end - batch_start) / arity;
                         let preimages =
                             as_generic_arrays::<TreeArity>(&tree_data[batch_start..batch_end]);
-                        let hashed = batcher.hash(&preimages)?;
+                        let hashed = batcher.hash(&preimages, mode)?;
 
                         #[allow(clippy::drop_ref)]
                         drop(preimages); // make sure we don't reference tree_data anymore
@@ -164,7 +164,7 @@ where
                 for i in self.leaf_count..intermediate_tree_size {
                     tree_data[i] =
                         Poseidon::new_with_preimage(&tree_data[start..end], &self.tree_constants)
-                            .hash();
+                            .hash(mode);
                     start += arity;
                     end += arity;
                 }
@@ -233,13 +233,13 @@ where
 
     // Compute root of tree composed of all identical columns. For use in checking correctness of GPU tree-building
     // without the cost of generating a full tree.
-    pub fn compute_uniform_tree_root(&mut self, leaf: Fr) -> Result<Fr, Error> {
+    pub fn compute_uniform_tree_root(&mut self, leaf: Fr, mode: HashMode) -> Result<Fr, Error> {
         let arity = TreeArity::to_usize();
         let mut element = leaf;
         for _ in 0..self.tree_height() {
             let preimage = vec![element; arity];
             // Each row is the hash of the identical elements in the previous row.
-            element = Poseidon::new_with_preimage(&preimage, &self.tree_constants).hash();
+            element = Poseidon::new_with_preimage(&preimage, &self.tree_constants).hash(mode);
         }
 
         // The last element computed is the root.

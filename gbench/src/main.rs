@@ -58,7 +58,7 @@ fn bench_column_building(
         let columns: Vec<GenericArray<Fr, U11>> =
             (0..effective_batch_size).map(|_| constant_column).collect();
 
-        let _ = builder.add_columns(columns.as_slice()).unwrap();
+        let _ = builder.add_columns(columns.as_slice(), mode).unwrap();
         total_columns += columns.len();
     }
     println!();
@@ -71,7 +71,7 @@ fn bench_column_building(
         "{}: adding final column batch and building tree",
         log_prefix
     );
-    let (_, res) = builder.add_final_columns(final_columns.as_slice()).unwrap();
+    let (_, res) = builder.add_final_columns(final_columns.as_slice(), mode).unwrap();
     info!("{}: end commitment", log_prefix);
     let elapsed = start.elapsed();
     info!("{}: commitment time: {:?}", log_prefix, elapsed);
@@ -81,7 +81,7 @@ fn bench_column_building(
 
     let computed_root = res[res.len() - 1];
 
-    let expected_root = builder.compute_uniform_tree_root(final_columns[0]).unwrap();
+    let expected_root = builder.compute_uniform_tree_root(final_columns[0], mode).unwrap();
     let expected_size = builder.tree_size();
 
     assert_eq!(
@@ -109,23 +109,23 @@ struct Opts {
     max_column_batch_size: usize,
 
     // zero_input: all columns data is 0x000....000
-    #[structopt(short, long)]
+    #[structopt(long)]
     zero_input: bool,
 
     // one_input: all columns data is 0x000....001
-    #[structopt(short, long)]
+    #[structopt(long)]
     one_input: bool,
 
     // one_input: all columns data is random
-    #[structopt(short, long)]
+    #[structopt(long)]
     random_input: bool,
 
     // gpu_cpu_parallel: gpu & cpu calculate simultaneously, check each other
-    #[structopt(short, long)]
+    #[structopt(long)]
     gpu_cpu_parallel: bool,
 
     //correct: use HashMode::{Correct, OptimizedStatic};
-    #[structopt(short, long)]
+    #[structopt(long)]
     correct: bool,
 }
 
@@ -171,11 +171,12 @@ fn main() -> Result<(), Error> {
 
     let mut threads = Vec::new();
 
+
     if gpu_cpu_parallel {
         for batcher_type in batcher_types {
+            let log_prefix = format!("GPU[Selector: {:?}]", batcher_type);
             threads.push(thread::spawn(move || {
-                //let log_prefix = format!("GPU[Selector: {:?}]", batcher_type);
-                info!("{} --> Run {}", log_prefix, i);
+                //info!("{} --> Run {}", log_prefix, i);
                 bench_column_building(
                     &log_prefix,
                     Some(batcher_type.clone()),
@@ -191,8 +192,8 @@ fn main() -> Result<(), Error> {
 
             }));
             threads.push(thread::spawn(move || {
-                //let log_prefix = format!("GPU[Selector: {:?}]", batcher_type);
-                //info!("{} --> Run {}", log_prefix, i);
+                let log_prefix = format!("CPU");
+                info!("{}", log_prefix);
                 bench_column_building(
                     &log_prefix,
                     None,
@@ -209,6 +210,8 @@ fn main() -> Result<(), Error> {
             }));
         }
     } else {
+        let log_prefix = format!("CPU");
+        info!("{}", log_prefix);
         bench_column_building(
             &log_prefix,
             None,
