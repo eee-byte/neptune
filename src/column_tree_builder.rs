@@ -1,6 +1,6 @@
 use crate::batch_hasher::{Batcher, BatcherType};
 use crate::error::Error;
-use crate::poseidon::{Poseidon, PoseidonConstants};
+use crate::poseidon::{Poseidon, PoseidonConstants, HashMode};
 use crate::tree_builder::{TreeBuilder, TreeBuilderTrait};
 use crate::{Arity, BatchHasher};
 use bellperson::bls::{Bls12, Fr};
@@ -43,7 +43,7 @@ where
     ColumnArity: Arity<Fr>,
     TreeArity: Arity<Fr>,
 {
-    fn add_columns(&mut self, columns: &[GenericArray<Fr, ColumnArity>]) -> Result<(), Error> {
+    fn add_columns(&mut self, columns: &[GenericArray<Fr, ColumnArity>], mode: HashMode) -> Result<(), Error> {
         let start = self.fill_index;
         let column_count = columns.len();
         let end = start + column_count;
@@ -58,7 +58,7 @@ where
             }
             None => columns.iter().enumerate().for_each(|(i, column)| {
                 self.data[start + i] =
-                    Poseidon::new_with_preimage(&column, &self.column_constants).hash();
+                    Poseidon::new_with_preimage(&column, &self.column_constants).hash(mode);
             }),
         };
 

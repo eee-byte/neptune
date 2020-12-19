@@ -13,6 +13,7 @@ use std::result::Result;
 use std::thread;
 use std::time::Instant;
 use structopt::StructOpt;
+use neptune::poseidon::HashMode;
 
 fn bench_column_building(
     log_prefix: &str,
@@ -20,6 +21,7 @@ fn bench_column_building(
     leaves: usize,
     max_column_batch_size: usize,
     max_tree_batch_size: usize,
+    mode :HashMode
 ) -> Fr {
     info!("{}: Creating ColumnTreeBuilder", log_prefix);
     let mut builder = ColumnTreeBuilder::<U11, U8>::new(
@@ -102,8 +104,29 @@ fn bench_column_building(
 struct Opts {
     #[structopt(long = "max-tree-batch-size", default_value = "700000")]
     max_tree_batch_size: usize,
+
     #[structopt(long = "max-column-batch-size", default_value = "400000")]
     max_column_batch_size: usize,
+
+    // zero_input: all columns data is 0x000....000
+    #[structopt(short, long)]
+    zero_input: bool,
+
+    // one_input: all columns data is 0x000....001
+    #[structopt(short, long)]
+    one_input: bool,
+
+    // one_input: all columns data is random
+    #[structopt(short, long)]
+    random_input: bool,
+
+    // gpu_cpu_parallel: gpu & cpu calculate simultaneously, check each other
+    #[structopt(short, long)]
+    gpu_cpu_parallel: bool,
+
+    //correct: use HashMode::{Correct, OptimizedStatic};
+    #[structopt(short, long)]
+    correct: bool,
 }
 
 fn main() -> Result<(), Error> {
@@ -113,18 +136,27 @@ fn main() -> Result<(), Error> {
 
     let opts = Opts::from_args();
 
+    let kib = 2; // 2KiB
     //let kib = 1024 * 1024 * 4; // 4GiB
-    let kib = 1024 * 512; // 512MiB
-    //let kib = 1024 * 1024 * 32; // 432GiB
+    //let kib = 1024 * 512; // 512MiB
+    //let kib = 1024 * 1024 * 32; // 32GiB
     let bytes = kib * 1024;
     let leaves = bytes / 32;
+
     let max_column_batch_size = opts.max_column_batch_size;
     let max_tree_batch_size = opts.max_tree_batch_size;
+    let correct = opts.correct;
+    let zero_input = opts.zero_input;
+    let one_input = opts.one_input;
+    let random_input = opts.random_input;
+    let gpu_cpu_parallel = opts.gpu_cpu_parallel;
+    let correct = opts.correct;
 
     info!("KiB: {}", kib);
     info!("leaves: {}", leaves);
     info!("max column batch size: {}", max_column_batch_size);
     info!("max tree batch size: {}", max_tree_batch_size);
+
 
     // Comma separated list of GPU bus-ids
     let gpus = std::env::var("NEPTUNE_GBENCH_GPUS");
@@ -136,11 +168,13 @@ fn main() -> Result<(), Error> {
                 .collect::<Vec<_>>()
         })
         .unwrap_or(vec![BatcherType::GPU]);
+
     let mut threads = Vec::new();
-    for batcher_type in batcher_types {
-        threads.push(thread::spawn(move || {
-            let log_prefix = format!("GPU[Selector: {:?}]", batcher_type);
-            for i in 0..3 {
+
+    if gpu_cpu_parallel {
+        for batcher_type in batcher_types {
+            threads.push(thread::spawn(move || {
+                //let log_prefix = format!("GPU[Selector: {:?}]", batcher_type);
                 info!("{} --> Run {}", log_prefix, i);
                 bench_column_building(
                     &log_prefix,
@@ -148,10 +182,47 @@ fn main() -> Result<(), Error> {
                     leaves,
                     max_column_batch_size,
                     max_tree_batch_size,
+                    if correct {
+                        HashMode::Correct
+                    } else {
+                        HashMode::OptimizedStatic
+                    }
                 );
+
+            }));
+            threads.push(thread::spawn(move || {
+                //let log_prefix = format!("GPU[Selector: {:?}]", batcher_type);
+                //info!("{} --> Run {}", log_prefix, i);
+                bench_column_building(
+                    &log_prefix,
+                    None,
+                    leaves,
+                    max_column_batch_size,
+                    max_tree_batch_size,
+                    if correct {
+                        HashMode::Correct
+                    } else {
+                        HashMode::OptimizedStatic
+                    }
+                );
+
+            }));
+        }
+    } else {
+        bench_column_building(
+            &log_prefix,
+            None,
+            leaves,
+            max_column_batch_size,
+            max_tree_batch_size,
+            if correct {
+                HashMode::Correct
+            } else {
+                HashMode::OptimizedStatic
             }
-        }));
+        );
     }
+
     for thread in threads {
         thread.join().unwrap();
     }

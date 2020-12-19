@@ -11,6 +11,7 @@ pub use error::Error;
 use ff::{Field, PrimeField, ScalarEngine};
 use generic_array::GenericArray;
 use log::info;
+use crate::poseidon::HashMode;
 
 /// Poseidon circuit
 pub mod circuit;
@@ -63,17 +64,18 @@ where
 {
     // type State;
 
-    fn hash(&mut self, preimages: &[GenericArray<Scalar, A>]) -> Result<Vec<Scalar>, Error>;
+    fn hash(&mut self, preimages: &[GenericArray<Scalar, A>], mode: HashMode) -> Result<Vec<Scalar>, Error>;
 
     fn hash_into_slice(
         &mut self,
         target_slice: &mut [Scalar],
         preimages: &[GenericArray<Scalar, A>],
+        mode: HashMode
     ) -> Result<(), Error> {
         assert_eq!(target_slice.len(), preimages.len());
         // FIXME: Account for max batch size.
 
-        Ok(target_slice.copy_from_slice(self.hash(preimages)?.as_slice()))
+        Ok(target_slice.copy_from_slice(self.hash(preimages, mode)?.as_slice()))
     }
 
     /// `max_batch_size` is advisory. Implenters of `BatchHasher` should ensure that up to the returned max hashes can

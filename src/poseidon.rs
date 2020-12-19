@@ -120,7 +120,7 @@ where
     _a: PhantomData<A>,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Copy, Clone)]
 pub enum HashMode {
     // The initial and correct version of the algorithm. We should preserve the ability to hash this way for reference
     // and to preserve confidence in our tests along thew way.
@@ -346,8 +346,8 @@ where
         }
     }
 
-    pub fn hash(&mut self) -> E::Fr {
-        self.hash_in_mode(DEFAULT_HASH_MODE)
+    pub fn hash(&mut self, mode: HashMode) -> E::Fr {
+        self.hash_in_mode(mode)
     }
 
     fn apply_padding(&mut self) {
@@ -565,10 +565,10 @@ impl<A> BatchHasher<A> for SimplePoseidonBatchHasher<A>
 where
     A: Arity<Fr>,
 {
-    fn hash(&mut self, preimages: &[GenericArray<Fr, A>]) -> Result<Vec<Fr>, Error> {
+    fn hash(&mut self, preimages: &[GenericArray<Fr, A>], mode: HashMode) -> Result<Vec<Fr>, Error> {
         Ok(preimages
             .iter()
-            .map(|preimage| Poseidon::new_with_preimage(&preimage, &self.constants).hash())
+            .map(|preimage| Poseidon::new_with_preimage(&preimage, &self.constants).hash(mode.clone()))
             .collect())
     }
 
