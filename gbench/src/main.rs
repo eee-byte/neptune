@@ -14,6 +14,8 @@ use std::thread;
 use std::time::Instant;
 use structopt::StructOpt;
 use neptune::poseidon::HashMode;
+use rand_xorshift::XorShiftRng;
+use rand_core::SeedableRng;
 
 fn bench_column_building(
     log_prefix: &str,
@@ -21,7 +23,8 @@ fn bench_column_building(
     leaves: usize,
     max_column_batch_size: usize,
     max_tree_batch_size: usize,
-    mode :HashMode
+    mode :HashMode,
+    input_mode: INPUT_MODE
 ) -> Fr {
     info!("{}: Creating ColumnTreeBuilder", log_prefix);
     let mut builder = ColumnTreeBuilder::<U11, U8>::new(
@@ -34,7 +37,17 @@ fn bench_column_building(
     info!("{}: ColumnTreeBuilder created", log_prefix);
 
     // Simplify computing the expected root.
-    let constant_element = Fr::zero();
+    let constant_element = match input_mode {
+        INPUT_MODE::ZERO => Fr::zero(),
+        INPUT_MODE::ONE => Fr::one(),
+        INPUT_MODE::RANDOM => {
+            let mut rng = XorShiftRng::from_seed([
+                0x59, 0x62, 0xbe, 0x5d, 0x76, 0x3d, 0x31, 0x8d, 0x17, 0xdb, 0x37, 0x32, 0x54, 0x06,
+                0xbc, 0xe5,
+            ]);
+            Fr::random(&mut rng)
+        }
+    };
     let constant_column = GenericArray::<Fr, U11>::generate(|_| constant_element);
 
     let max_batch_size = if let Some(batcher) = &builder.column_batcher {
@@ -129,6 +142,13 @@ struct Opts {
     correct: bool,
 }
 
+#[derive(Debug, Clone, Copy)]
+enum INPUT_MODE {
+    ZERO,
+    ONE,
+    RANDOM
+}
+
 fn main() -> Result<(), Error> {
     #[cfg(all(feature = "gpu", target_os = "macos"))]
     unimplemented!("Running on macos is not recommended and may have bad consequences -- experiment at your own risk.");
@@ -145,12 +165,16 @@ fn main() -> Result<(), Error> {
 
     let max_column_batch_size = opts.max_column_batch_size;
     let max_tree_batch_size = opts.max_tree_batch_size;
-    let correct = opts.correct;
-    let zero_input = opts.zero_input;
-    let one_input = opts.one_input;
-    let random_input = opts.random_input;
     let gpu_cpu_parallel = opts.gpu_cpu_parallel;
     let correct = opts.correct;
+
+    let input_mode = if opts.zero_input {
+        INPUT_MODE::ZERO
+    } else if opts.one_input {
+        INPUT_MODE::ONE
+    } else {
+        INPUT_MODE::RANDOM
+    };
 
     info!("KiB: {}", kib);
     info!("leaves: {}", leaves);
@@ -187,7 +211,8 @@ fn main() -> Result<(), Error> {
                         HashMode::Correct
                     } else {
                         HashMode::OptimizedStatic
-                    }
+                    },
+                    input_mode
                 );
 
             }));
@@ -204,7 +229,8 @@ fn main() -> Result<(), Error> {
                         HashMode::Correct
                     } else {
                         HashMode::OptimizedStatic
-                    }
+                    },
+                    input_mode
                 );
 
             }));
@@ -222,7 +248,8 @@ fn main() -> Result<(), Error> {
                 HashMode::Correct
             } else {
                 HashMode::OptimizedStatic
-            }
+            },
+            input_mode
         );
     }
 
