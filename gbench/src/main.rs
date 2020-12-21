@@ -16,101 +16,8 @@ use structopt::StructOpt;
 use neptune::poseidon::HashMode;
 use rand_xorshift::XorShiftRng;
 use rand_core::SeedableRng;
+use bellperson::domain::Scalar;
 
-fn bench_column_building(
-    log_prefix: &str,
-    batcher_type: Option<BatcherType>,
-    leaves: usize,
-    max_column_batch_size: usize,
-    max_tree_batch_size: usize,
-    mode :HashMode,
-    input_mode: INPUT_MODE
-) -> Fr {
-    info!("{}: Creating ColumnTreeBuilder", log_prefix);
-    let mut builder = ColumnTreeBuilder::<U11, U8>::new(
-        batcher_type,
-        leaves,
-        max_column_batch_size,
-        max_tree_batch_size,
-    )
-    .unwrap();
-    info!("{}: ColumnTreeBuilder created", log_prefix);
-
-    // Simplify computing the expected root.
-    let constant_element = match input_mode {
-        INPUT_MODE::ZERO => Fr::zero(),
-        INPUT_MODE::ONE => Fr::one(),
-        INPUT_MODE::RANDOM => {
-            let mut rng = XorShiftRng::from_seed([
-                0x59, 0x62, 0xbe, 0x5d, 0x76, 0x3d, 0x31, 0x8d, 0x17, 0xdb, 0x37, 0x32, 0x54, 0x06,
-                0xbc, 0xe5,
-            ]);
-            Fr::random(&mut rng)
-        }
-    };
-    let constant_column = GenericArray::<Fr, U11>::generate(|_| constant_element);
-
-    let max_batch_size = if let Some(batcher) = &builder.column_batcher {
-        batcher.max_batch_size()
-    } else {
-        leaves
-    };
-
-    let effective_batch_size = usize::min(leaves, max_batch_size);
-    info!(
-        "{}: Using effective batch size {} to build columns",
-        log_prefix, effective_batch_size
-    );
-
-    info!("{}: adding column batches", log_prefix);
-    info!("{}: start commitment", log_prefix);
-    let start = Instant::now();
-    let mut total_columns = 0;
-    while total_columns + effective_batch_size < leaves {
-        print!(".");
-        let columns: Vec<GenericArray<Fr, U11>> =
-            (0..effective_batch_size).map(|_| constant_column).collect();
-
-        let _ = builder.add_columns(columns.as_slice(), mode).unwrap();
-        total_columns += columns.len();
-    }
-    println!();
-
-    let final_columns: Vec<_> = (0..leaves - total_columns)
-        .map(|_| GenericArray::<Fr, U11>::generate(|_| constant_element))
-        .collect();
-
-    info!(
-        "{}: adding final column batch and building tree",
-        log_prefix
-    );
-    let (_, res) = builder.add_final_columns(final_columns.as_slice(), mode).unwrap();
-    info!("{}: end commitment", log_prefix);
-    let elapsed = start.elapsed();
-    info!("{}: commitment time: {:?}", log_prefix, elapsed);
-
-    total_columns += final_columns.len();
-    assert_eq!(total_columns, leaves);
-
-    let computed_root = res[res.len() - 1];
-
-    let expected_root = builder.compute_uniform_tree_root(final_columns[0], mode).unwrap();
-    let expected_size = builder.tree_size();
-
-    assert_eq!(
-        expected_size,
-        res.len(),
-        "{}: result tree was not expected size",
-        log_prefix
-    );
-    assert_eq!(
-        expected_root, computed_root,
-        "{}: computed root was not the expected one",
-        log_prefix
-    );
-
-    res[res.len() - 1]
-}
 
 #[derive(Debug, StructOpt, Clone, Copy)]
 #[structopt(name = "Neptune gbench", about = "Neptune benchmarking program")]
@@ -148,6 +55,104 @@ enum INPUT_MODE {
     ONE,
     RANDOM
 }
+
+fn bench_column_building(
+    log_prefix: &str,
+    batcher_type: Option<BatcherType>,
+    leaves: usize,
+    max_column_batch_size: usize,
+    max_tree_batch_size: usize,
+    mode :HashMode,
+    input_mode: INPUT_MODE
+) -> Fr {
+    info!("{}: Creating ColumnTreeBuilder", log_prefix);
+    let mut builder = ColumnTreeBuilder::<U11, U8>::new(
+        batcher_type,
+        leaves,
+        max_column_batch_size,
+        max_tree_batch_size,
+    )
+    .unwrap();
+    info!("{}: ColumnTreeBuilder created", log_prefix);
+
+    // Simplify computing the expected root.
+    let constant_element = match input_mode {
+        INPUT_MODE::ZERO => Fr::zero(),
+        INPUT_MODE::ONE => Fr::one(),
+        INPUT_MODE::RANDOM => {
+            let mut rng = XorShiftRng::from_seed([
+                0x59, 0x62, 0xbe, 0x5d, 0x76, 0x3d, 0x31, 0x8d, 0x17, 0xdb, 0x37, 0x32, 0x54, 0x06,
+                0xbc, 0xe5,
+            ]);
+            Fr::random(&mut rng)
+        }
+    };
+    let constant_column = GenericArray::<Fr, U11>::generate(|_| constant_element);
+    info!("constant_column: {:?}", constant_column);
+
+    let max_batch_size = if let Some(batcher) = &builder.column_batcher {
+        batcher.max_batch_size()
+    } else {
+        leaves
+    };
+
+    let effective_batch_size = usize::min(leaves, max_batch_size);
+    info!(
+        "{}: Using effective batch size {} to build columns",
+        log_prefix, effective_batch_size
+    );
+
+    info!("{}: adding column batches", log_prefix);
+    info!("{}: start commitment", log_prefix);
+    let start = Instant::now();
+    let mut total_columns = 0;
+    while total_columns + effective_batch_size < leaves {
+        print!(".");
+        let columns: Vec<GenericArray<Fr, U11>> =
+            (0..effective_batch_size).map(|_| constant_column).collect();
+
+        let _ = builder.add_columns(columns.as_slice(), mode).unwrap();
+        total_columns += columns.len();
+    }
+    println!();
+
+    let final_columns: Vec<_> = (0..leaves - total_columns)
+        .map(|_| GenericArray::<Fr, U11>::generate(|_| constant_element))
+        .collect();
+    info!("final_columns: {:?}", final_columns);
+    info!("{}: adding final column batch and building tree", log_prefix);
+    let (_, res) = builder.add_final_columns(final_columns.as_slice(), mode).unwrap();
+    info!("res: {:?}", res);
+    info!("{}: end commitment", log_prefix);
+    let elapsed = start.elapsed();
+    info!("{}: commitment time: {:?}", log_prefix, elapsed);
+
+    total_columns += final_columns.len();
+    assert_eq!(total_columns, leaves);
+
+    let computed_root = res[res.len() - 1];
+
+    let expected_root = builder.compute_uniform_tree_root(final_columns[0], mode).unwrap();
+    let expected_size = builder.tree_size();
+    info!("{}: expected_root", expected_root);
+    info!("{}: computed_root", computed_root);
+
+    assert_eq!(
+        expected_size,
+        res.len(),
+        "{}: result tree was not expected size",
+        log_prefix
+    );
+    assert_eq!(
+        expected_root, computed_root,
+        "{}: computed root was not the expected one",
+        log_prefix
+    );
+
+    res[res.len() - 1]
+}
+
+
 
 fn main() -> Result<(), Error> {
     #[cfg(all(feature = "gpu", target_os = "macos"))]
@@ -193,15 +198,19 @@ fn main() -> Result<(), Error> {
         })
         .unwrap_or(vec![BatcherType::GPU]);
 
-    let mut threads = Vec::new();
 
 
     if gpu_cpu_parallel {
         for batcher_type in batcher_types {
+            let mut threads = Vec::new();
+
+            let mut cpu_res = neptune::Scalar::zero();
+            let mut gpu_res= neptune::Scalar::zero();
+
             let log_prefix = format!("GPU[Selector: {:?}]", batcher_type);
             threads.push(thread::spawn(move || {
                 //info!("{} --> Run {}", log_prefix, i);
-                bench_column_building(
+                *&mut gpu_res = bench_column_building(
                     &log_prefix,
                     Some(batcher_type.clone()),
                     leaves,
@@ -219,7 +228,7 @@ fn main() -> Result<(), Error> {
             threads.push(thread::spawn(move || {
                 let log_prefix = format!("CPU");
                 info!("{}", log_prefix);
-                bench_column_building(
+                *&mut cpu_res = bench_column_building(
                     &log_prefix,
                     None,
                     leaves,
@@ -234,6 +243,10 @@ fn main() -> Result<(), Error> {
                 );
 
             }));
+            assert_eq!(cpu_res, gpu_res, "GPU CPU execution results are inconsistent");
+            for thread in threads {
+                thread.join().unwrap();
+            }
         }
     } else {
         let log_prefix = format!("CPU");
@@ -253,9 +266,6 @@ fn main() -> Result<(), Error> {
         );
     }
 
-    for thread in threads {
-        thread.join().unwrap();
-    }
     info!("end");
     // Leave time to verify GPU memory usage goes to zero before exiting.
     std::thread::sleep(std::time::Duration::from_millis(15000));
