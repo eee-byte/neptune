@@ -395,6 +395,10 @@ where
     }
 
     fn full_round(&mut self, last_round: bool) {
+        println!("#### optimized_static full_round 输入数据");
+        println!("```");
+        println!("elements: {:?}", self.elements.clone());
+        println!("```");
         let to_take = self.elements.len();
         let post_round_keys = self
             .constants
@@ -402,6 +406,7 @@ where
             .iter()
             .skip(self.constants_offset)
             .take(to_take);
+
 
         if !last_round {
             let needed = self.constants_offset + to_take;
@@ -412,6 +417,14 @@ where
                 needed
             );
         }
+        println!("---");
+        println!("#### quintic_s_box 输入参数");
+        println!("```");
+        println!("post_round_keys: {:?}", post_round_keys);
+        println!("```");
+        println!("```");
+        println!("elements: {:?}", self.elements.clone());
+        println!("```");
         self.elements
             .iter_mut()
             .zip(post_round_keys)
@@ -433,6 +446,11 @@ where
             self.constants_offset += self.elements.len();
         }
         self.round_product_mds();
+        println!("---");
+        println!("#### full_round 输出参数");
+        println!("```");
+        println!("elements: {:?}", self.elements);
+        println!("```");
     }
 
     /// The partial round is the same as the full round, with the difference that we apply the S-Box only to the first (arity tag) poseidon leaf.

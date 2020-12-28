@@ -45,14 +45,24 @@ where
     // Apply the quintic S-Box to all elements, after adding the round key.
     // Round keys are added in the S-box to match circuits (where the addition is free)
     // and in preparation for the shift to adding round keys after (rather than before) applying the S-box.
-
+    println!("#### Correct full_round 输入数据");
+    println!("```");
+    println!("elements: {:?}",  p.elements);
+    println!("```");
     let pre_round_keys = p
         .constants
         .round_constants
         .iter()
         .skip(p.constants_offset)
         .map(|x| Some(x));
-
+    println!("---");
+    println!("#### quintic_s_box 输入参数");
+    println!("```");
+    println!("post_round_keys: {:?}", pre_round_keys);
+    println!("```");
+    println!("```");
+    println!("elements: {:?}",  p.elements);
+    println!("```");
     p.elements
         .iter_mut()
         .zip(pre_round_keys)
@@ -65,6 +75,11 @@ where
     // M(B)
     // Multiply the elements by the constant MDS matrix
     p.product_mds();
+    println!("---");
+    println!("#### full_round 输出参数");
+    println!("```");
+    println!("elements: {:?}", p.elements);
+    println!("```");
 }
 
 /// The partial round is the same as the full round, with the difference that we apply the S-Box only to the first bitflags poseidon leaf.
