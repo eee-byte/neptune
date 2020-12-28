@@ -368,9 +368,10 @@ where
     pub fn hash_optimized_static(&mut self) -> E::Fr {
         // The first full round should use the initial constants.
         self.add_round_constants();
-
-        for _ in 0..self.constants.half_full_rounds {
-            self.full_round(false);
+        let mut print_flag = true;
+        for i in 0..self.constants.half_full_rounds {
+            self.full_round(false, print_flag);
+            print_flag = false;
         }
 
         for _ in 0..self.constants.partial_rounds {
@@ -378,10 +379,10 @@ where
         }
 
         // All but last full round.
-        for _ in 1..self.constants.half_full_rounds {
-            self.full_round(false);
+        for i in 1..self.constants.half_full_rounds {
+            self.full_round(false, print_flag );
         }
-        self.full_round(true);
+        self.full_round(true, print_flag);
 
         assert_eq!(
             self.constants_offset,
@@ -394,11 +395,13 @@ where
         self.elements[1]
     }
 
-    fn full_round(&mut self, last_round: bool) {
-        println!("#### optimized_static full_round 输入数据");
-        println!("```");
-        println!("elements: {:?}", self.elements.clone());
-        println!("```");
+    fn full_round(&mut self, last_round: bool, count: bool) {
+        if count {
+            println!("#### optimized_static full_round 输入数据");
+            println!("```");
+            println!("elements: {:?}", self.elements.clone());
+            println!("```");
+        }
         let to_take = self.elements.len();
         let post_round_keys = self
             .constants
@@ -417,14 +420,16 @@ where
                 needed
             );
         }
-        println!("---");
-        println!("#### quintic_s_box 输入参数");
-        println!("```");
-        println!("post_round_keys: {:?}", post_round_keys);
-        println!("```");
-        println!("```");
-        println!("elements: {:?}", self.elements.clone());
-        println!("```");
+        if count {
+            println!("---");
+            println!("#### quintic_s_box 输入参数");
+            println!("```");
+            println!("post_round_keys: {:?}", post_round_keys);
+            println!("```");
+            println!("```");
+            println!("elements: {:?}", self.elements.clone());
+            println!("```");
+        }
         self.elements
             .iter_mut()
             .zip(post_round_keys)
@@ -446,11 +451,13 @@ where
             self.constants_offset += self.elements.len();
         }
         self.round_product_mds();
-        println!("---");
-        println!("#### full_round 输出参数");
-        println!("```");
-        println!("elements: {:?}", self.elements);
-        println!("```");
+        if count {
+            println!("---");
+            println!("#### full_round 输出参数");
+            println!("```");
+            println!("elements: {:?}", self.elements);
+            println!("```");
+        }
     }
 
     /// The partial round is the same as the full round, with the difference that we apply the S-Box only to the first (arity tag) poseidon leaf.
