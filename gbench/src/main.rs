@@ -77,7 +77,7 @@ fn bench_column_building(
     )
     .unwrap();
     info!("{}: ColumnTreeBuilder created", log_prefix);
-
+    info!("{:?}: builder", builder.column_constants);
     // Simplify computing the expected root.
     let constant_element = match input_mode {
         InputMode::ZERO => Fr::zero(),

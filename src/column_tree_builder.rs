@@ -33,7 +33,7 @@ where
     data: Vec<Fr>,
     /// Index of the first unfilled datum.
     fill_index: usize,
-    column_constants: PoseidonConstants<Bls12, ColumnArity>,
+    pub column_constants: PoseidonConstants<Bls12, ColumnArity>,
     pub column_batcher: Option<Batcher<ColumnArity>>,
     tree_builder: TreeBuilder<TreeArity>,
 }

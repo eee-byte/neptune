@@ -367,8 +367,17 @@ where
 
     pub fn hash_optimized_static(&mut self) -> E::Fr {
         // The first full round should use the initial constants.
-        self.add_round_constants();
         let mut print_flag = true;
+        if print_flag {
+            println!("#### optimized_static： before add_round_constants 原始输入数据");
+            println!("```");
+            println!("elements: {:?}",  self.elements);
+            println!("```");
+            println!("---");
+        }
+
+        self.add_round_constants();
+
         for i in 0..self.constants.half_full_rounds {
             self.full_round(false, print_flag);
             print_flag = false;
@@ -442,6 +451,13 @@ where
                 };
                 quintic_s_box::<E>(l, None, post_key);
             });
+        if count {
+            println!("---");
+            println!("#### quintic_s_box 输出");
+            println!("```");
+            println!("elements: {:?}", self.elements.clone());
+            println!("```");
+        }
         // We need this because post_round_keys will have been empty, so it didn't happen in the for_each. :(
         if last_round {
             self.elements
@@ -497,7 +513,13 @@ where
             {
                 let index = self.current_round - sparse_offset - 1;
                 let sparse_matrix = &self.constants.sparse_matrixes[index];
-
+                {
+                    println!("---");
+                    println!("#### product_mds_with_sparse_matrix 内部参数 sparse_matrix");
+                    println!("```");
+                    println!("index: {:?}", index);
+                    println!("```");
+                }
                 self.product_mds_with_sparse_matrix(&sparse_matrix);
             } else {
                 self.product_mds();
@@ -518,7 +540,20 @@ where
     /// exploits the fact that our MDS matrices are symmetric by construction.
     pub(crate) fn product_mds_with_matrix(&mut self, matrix: &Matrix<E::Fr>) {
         let mut result = GenericArray::<E::Fr, A::ConstantsSize>::generate(|_| E::Fr::zero());
-
+        {
+            println!("---");
+            println!("#### product_mds_with_matrix 内部参数 result");
+            println!("```");
+            println!("result: {:?}", result);
+            println!("```");
+        }
+        {
+            println!("---");
+            println!("#### product_mds_with_matrix 内部参数 matrix");
+            println!("```");
+            println!("matrix: {:?}", matrix);
+            println!("```");
+        }
         for (j, val) in result.iter_mut().enumerate() {
             for (i, row) in matrix.iter().enumerate() {
                 let mut tmp = row[j];
@@ -533,6 +568,13 @@ where
     // Sparse matrix in this context means one of the form, M''.
     fn product_mds_with_sparse_matrix(&mut self, sparse_matrix: &SparseMatrix<E>) {
         let mut result = GenericArray::<E::Fr, A::ConstantsSize>::generate(|_| E::Fr::zero());
+        {
+            println!("---");
+            println!("#### product_mds_with_sparse_matrix 内部参数 result");
+            println!("```");
+            println!("result: {:?}", result);
+            println!("```");
+        }
 
         // First column is dense.
         for (i, val) in sparse_matrix.w_hat.iter().enumerate() {
