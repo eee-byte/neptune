@@ -2,7 +2,7 @@ use crate::batch_hasher::{Batcher, BatcherType};
 #[cfg(all(feature = "gpu", not(target_os = "macos")))]
 use crate::cl::GPUSelector;
 use crate::error::Error;
-use crate::poseidon::{Poseidon, PoseidonConstants};
+use crate::poseidon::{Poseidon, PoseidonConstants, HashMode};
 use crate::tree_builder::{TreeBuilder, TreeBuilderTrait};
 use crate::{Arity, BatchHasher};
 use bellperson::bls::{Bls12, Fr};
@@ -14,10 +14,11 @@ where
     ColumnArity: Arity<Fr>,
     TreeArity: Arity<Fr>,
 {
-    fn add_columns(&mut self, columns: &[GenericArray<Fr, ColumnArity>]) -> Result<(), Error>;
+    fn add_columns(&mut self, columns: &[GenericArray<Fr, ColumnArity>], mode: HashMode) -> Result<(), Error>;
     fn add_final_columns(
         &mut self,
         columns: &[GenericArray<Fr, ColumnArity>],
+        mode: HashMode
     ) -> Result<(Vec<Fr>, Vec<Fr>), Error>;
 
     fn reset(&mut self);
@@ -32,7 +33,7 @@ where
     data: Vec<Fr>,
     /// Index of the first unfilled datum.
     fill_index: usize,
-    column_constants: PoseidonConstants<Bls12, ColumnArity>,
+    pub column_constants: PoseidonConstants<Bls12, ColumnArity>,
     pub column_batcher: Option<Batcher<ColumnArity>>,
     tree_builder: TreeBuilder<TreeArity>,
 }
@@ -43,7 +44,7 @@ where
     ColumnArity: Arity<Fr>,
     TreeArity: Arity<Fr>,
 {
-    fn add_columns(&mut self, columns: &[GenericArray<Fr, ColumnArity>]) -> Result<(), Error> {
+    fn add_columns(&mut self, columns: &[GenericArray<Fr, ColumnArity>], mode: HashMode) -> Result<(), Error> {
         let start = self.fill_index;
         let column_count = columns.len();
         let end = start + column_count;
@@ -54,11 +55,11 @@ where
 
         match self.column_batcher {
             Some(ref mut batcher) => {
-                batcher.hash_into_slice(&mut self.data[start..start + column_count], columns)?;
+                batcher.hash_into_slice(&mut self.data[start..start + column_count], columns, mode)?;
             }
             None => columns.iter().enumerate().for_each(|(i, column)| {
                 self.data[start + i] =
-                    Poseidon::new_with_preimage(&column, &self.column_constants).hash();
+                    Poseidon::new_with_preimage(&column, &self.column_constants).hash(mode);
             }),
         };
 
@@ -70,10 +71,11 @@ where
     fn add_final_columns(
         &mut self,
         columns: &[GenericArray<Fr, ColumnArity>],
+        mode: HashMode
     ) -> Result<(Vec<Fr>, Vec<Fr>), Error> {
-        self.add_columns(columns)?;
+        self.add_columns(columns, mode)?;
 
-        let (base, tree) = self.tree_builder.add_final_leaves(&self.data)?;
+        let (base, tree) = self.tree_builder.add_final_leaves(&self.data, mode)?;
         self.reset();
 
         Ok((base, tree))
@@ -154,11 +156,12 @@ where
     pub fn compute_uniform_tree_root(
         &mut self,
         column: GenericArray<Fr, ColumnArity>,
+        mode: HashMode
     ) -> Result<Fr, Error> {
         // All the leaves will be the same.
-        let element = Poseidon::new_with_preimage(&column, &self.column_constants).hash();
+        let element = Poseidon::new_with_preimage(&column, &self.column_constants).hash(mode);
 
-        self.tree_builder.compute_uniform_tree_root(element)
+        self.tree_builder.compute_uniform_tree_root(element, mode)
     }
 }
 

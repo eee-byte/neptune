@@ -11,6 +11,52 @@ use neptune::BatchHasher;
 use std::result::Result;
 use std::thread;
 use std::time::Instant;
+use structopt::StructOpt;
+use neptune::poseidon::HashMode;
+use rand_xorshift::XorShiftRng;
+use rand_core::SeedableRng;
+use bellperson::domain::Scalar;
+
+
+#[derive(Debug, StructOpt, Clone)]
+#[structopt(name = "Neptune gbench", about = "Neptune benchmarking program")]
+struct Opts {
+    #[structopt(long = "max-tree-batch-size", default_value = "700000")]
+    max_tree_batch_size: usize,
+
+    #[structopt(long = "max-column-batch-size", default_value = "400000")]
+    max_column_batch_size: usize,
+
+    #[structopt(long = "sector-size", default_value = "2KiB")]
+    sector_size: String,
+
+    // zero_input: all columns data is 0x000....000
+    #[structopt(long)]
+    zero_input: bool,
+
+    // one_input: all columns data is 0x000....001
+    #[structopt(long)]
+    one_input: bool,
+
+    // one_input: all columns data is random
+    #[structopt(long)]
+    random_input: bool,
+
+    // gpu_cpu_parallel: gpu & cpu calculate simultaneously, check each other
+    #[structopt(long)]
+    gpu_cpu_parallel: bool,
+
+    //correct: use HashMode::{Correct, OptimizedStatic};
+    #[structopt(long)]
+    correct: bool,
+}
+
+#[derive(Debug, Clone, Copy)]
+enum InputMode {
+    ZERO,
+    ONE,
+    RANDOM
+}
 
 fn bench_column_building(
     log_prefix: &str,
@@ -18,6 +64,8 @@ fn bench_column_building(
     leaves: usize,
     max_column_batch_size: usize,
     max_tree_batch_size: usize,
+    mode :HashMode,
+    input_mode: InputMode
 ) -> Fr {
     info!("{}: Creating ColumnTreeBuilder", log_prefix);
     let mut builder = ColumnTreeBuilder::<U11, U8>::new(
@@ -28,10 +76,28 @@ fn bench_column_building(
     )
     .unwrap();
     info!("{}: ColumnTreeBuilder created", log_prefix);
-
+    // println!("----");
+    // println!("初始化参数 column_constants");
+    // println!("```");
+    // println!("sparse_matrixes: {:?}", builder.column_constants.sparse_matrixes);
+    // println!("```");
+    // println!("```");
+    // println!("pre_sparse_matrix: {:?}", builder.column_constants.pre_sparse_matrix);
+    // println!("```");
     // Simplify computing the expected root.
-    let constant_element = Fr::zero();
+    let constant_element = match input_mode {
+        InputMode::ZERO => Fr::zero(),
+        InputMode::ONE => Fr::one(),
+        InputMode::RANDOM => {
+            let mut rng = XorShiftRng::from_seed([
+                0x59, 0x62, 0xbe, 0x5d, 0x76, 0x3d, 0x31, 0x8d, 0x17, 0xdb, 0x37, 0x32, 0x54, 0x06,
+                0xbc, 0xe5,
+            ]);
+            Fr::random(&mut rng)
+        }
+    };
     let constant_column = GenericArray::<Fr, U11>::generate(|_| constant_element);
+    info!("constant_column: {:?}", constant_column);
 
     let max_batch_size = if let Some(batcher) = &builder.column_batcher {
         batcher.max_batch_size()
@@ -54,7 +120,7 @@ fn bench_column_building(
         let columns: Vec<GenericArray<Fr, U11>> =
             (0..effective_batch_size).map(|_| constant_column).collect();
 
-        let _ = builder.add_columns(columns.as_slice()).unwrap();
+        let _ = builder.add_columns(columns.as_slice(), mode).unwrap();
         total_columns += columns.len();
     }
     println!();
@@ -62,12 +128,15 @@ fn bench_column_building(
     let final_columns: Vec<_> = (0..leaves - total_columns)
         .map(|_| GenericArray::<Fr, U11>::generate(|_| constant_element))
         .collect();
+    // println!("```");
+    // println!("final_columns: {:?}", final_columns);
+    // println!("```");
+    // println!("---");
+    info!("{}: adding final column batch and building tree", log_prefix);
+    let (base, res) = builder.add_final_columns(final_columns.as_slice(), mode).unwrap();
+    println!("res: {:?}", res);
+    println!("base: {:?}", base);
 
-    info!(
-        "{}: adding final column batch and building tree",
-        log_prefix
-    );
-    let (_, res) = builder.add_final_columns(final_columns.as_slice()).unwrap();
     info!("{}: end commitment", log_prefix);
     let elapsed = start.elapsed();
     info!("{}: commitment time: {:?}", log_prefix, elapsed);
@@ -77,8 +146,13 @@ fn bench_column_building(
 
     let computed_root = res[res.len() - 1];
 
-    let expected_root = builder.compute_uniform_tree_root(final_columns[0]).unwrap();
+    let expected_root = builder.compute_uniform_tree_root(final_columns[0], mode).unwrap();
     let expected_size = builder.tree_size();
+    println!("---");
+    println!("```");
+    println!("expected_root: {}", expected_root);
+    println!("computed_root: {}", computed_root);
+    println!("```");
 
     assert_eq!(
         expected_size,
@@ -98,17 +172,32 @@ fn bench_column_building(
 fn main() -> Result<(), Error> {
     env_logger::init();
 
-    let kib = 1024 * 1024 * 4; // 4GiB
-                               // let kib = 1024 * 512; // 512MiB
+    let opts = Opts::from_args();
+    let max_column_batch_size = opts.max_column_batch_size;
+    let max_tree_batch_size = opts.max_tree_batch_size;
+    let gpu_cpu_parallel = opts.gpu_cpu_parallel;
+    let correct = opts.correct;
+    let kib = match opts.sector_size.as_str() {
+        "2KiB" => 2,
+        "512MiB" => 1024 * 512,
+        "32GiB" => 1024 * 1024 * 32,
+        _ => 2
+    };
+    info!("KiB: {}", kib);
     let bytes = kib * 1024;
     let leaves = bytes / 32;
-    let max_column_batch_size = 400000;
-    let max_tree_batch_size = 700000;
-
-    info!("KiB: {}", kib);
     info!("leaves: {}", leaves);
     info!("max column batch size: {}", max_column_batch_size);
     info!("max tree batch size: {}", max_tree_batch_size);
+
+    let input_mode = if opts.zero_input {
+        InputMode::ZERO
+    } else if opts.one_input {
+        InputMode::ONE
+    } else {
+        InputMode::RANDOM
+    };
+    info!("input_mode: {:?}", input_mode);
 
     // Comma separated list of GPU bus-ids
     let gpus = std::env::var("NEPTUNE_GBENCH_GPUS");
@@ -120,25 +209,73 @@ fn main() -> Result<(), Error> {
                 .collect::<Vec<_>>()
         })
         .unwrap_or(vec![BatcherType::GPU]);
-    let mut threads = Vec::new();
-    for batcher_type in batcher_types {
-        threads.push(thread::spawn(move || {
+
+    if gpu_cpu_parallel {
+        for batcher_type in batcher_types {
+            let mut threads = Vec::new();
+
+            let mut cpu_res = neptune::Scalar::zero();
+            let mut gpu_res= neptune::Scalar::zero();
+
             let log_prefix = format!("GPU[Selector: {:?}]", batcher_type);
-            for i in 0..3 {
-                info!("{} --> Run {}", log_prefix, i);
-                bench_column_building(
+            threads.push(thread::spawn(move || {
+                info!("log_prefix: {}", log_prefix);
+                *&mut gpu_res = bench_column_building(
                     &log_prefix,
                     Some(batcher_type.clone()),
                     leaves,
                     max_column_batch_size,
                     max_tree_batch_size,
+                    if correct {
+                        HashMode::Correct
+                    } else {
+                        HashMode::OptimizedStatic
+                    },
+                    input_mode
                 );
+
+            }));
+            threads.push(thread::spawn(move || {
+                let log_prefix = format!("CPU");
+                info!("{}", log_prefix);
+                *&mut cpu_res = bench_column_building(
+                    &log_prefix,
+                    None,
+                    leaves,
+                    max_column_batch_size,
+                    max_tree_batch_size,
+                    if correct {
+                        HashMode::Correct
+                    } else {
+                        HashMode::OptimizedStatic
+                    },
+                    input_mode
+                );
+
+            }));
+            assert_eq!(cpu_res, gpu_res, "GPU CPU execution results are inconsistent");
+            for thread in threads {
+                thread.join().unwrap();
             }
-        }));
+        }
+    } else {
+        let log_prefix = format!("CPU");
+        info!("{}", log_prefix);
+        bench_column_building(
+            &log_prefix,
+            None,
+            leaves,
+            max_column_batch_size,
+            max_tree_batch_size,
+            if correct {
+                HashMode::Correct
+            } else {
+                HashMode::OptimizedStatic
+            },
+            input_mode
+        );
     }
-    for thread in threads {
-        thread.join().unwrap();
-    }
+
     info!("end");
     // Leave time to verify GPU memory usage goes to zero before exiting.
     std::thread::sleep(std::time::Duration::from_millis(15000));

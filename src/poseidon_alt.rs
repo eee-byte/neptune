@@ -18,10 +18,11 @@ where
 {
     // This counter is incremented when a round constants is read. Therefore, the round constants never repeat.
     // The first full round should use the initial constants.
-    full_round(p);
-
+    let mut print_flag = true;
+    full_round(p, print_flag);
+    print_flag = false;
     for _ in 1..p.constants.half_full_rounds {
-        full_round(p);
+        full_round(p, print_flag);
     }
 
     partial_round(p);
@@ -31,13 +32,13 @@ where
     }
 
     for _ in 0..p.constants.half_full_rounds {
-        full_round(p);
+        full_round(p, print_flag);
     }
 
     p.elements[1]
 }
 
-pub fn full_round<'a, E, A>(p: &mut Poseidon<'a, E, A>)
+pub fn full_round<'a, E, A>(p: &mut Poseidon<'a, E, A>, count: bool)
 where
     E: ScalarEngine,
     A: Arity<E::Fr>,
@@ -52,6 +53,20 @@ where
         .iter()
         .skip(p.constants_offset)
         .map(|x| Some(x));
+    if count {
+        println!("#### Correct full_round 输入数据");
+        println!("```");
+        println!("elements: {:?}",  p.elements);
+        println!("```");
+        println!("---");
+        println!("#### quintic_s_box 输入参数");
+        println!("```");
+        println!("post_round_keys: {:?}", pre_round_keys);
+        println!("```");
+        println!("```");
+        println!("elements: {:?}",  p.elements);
+        println!("```");
+    }
 
     p.elements
         .iter_mut()
@@ -65,6 +80,13 @@ where
     // M(B)
     // Multiply the elements by the constant MDS matrix
     p.product_mds();
+    if count {
+        println!("---");
+        println!("#### full_round 输出参数");
+        println!("```");
+        println!("elements: {:?}", p.elements);
+        println!("```");
+    }
 }
 
 /// The partial round is the same as the full round, with the difference that we apply the S-Box only to the first bitflags poseidon leaf.

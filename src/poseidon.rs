@@ -11,6 +11,7 @@ use generic_array::{sequence::GenericSequence, typenum, ArrayLength, GenericArra
 use std::marker::PhantomData;
 use typenum::marker_traits::Unsigned;
 use typenum::*;
+use log::info;
 
 /// Available arities for the Poseidon hasher.
 pub trait Arity<T>: ArrayLength<T> {
@@ -119,7 +120,7 @@ where
     _a: PhantomData<A>,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Copy, Clone)]
 pub enum HashMode {
     // The initial and correct version of the algorithm. We should preserve the ability to hash this way for reference
     // and to preserve confidence in our tests along thew way.
@@ -177,7 +178,9 @@ where
         assert!(hash_type.is_supported());
         let arity = A::to_usize();
         let width = arity + 1;
-
+        info!("---------------new_with_strength_and_type-----------------");
+        info!("--------------- strength:{:?}", strength);
+        info!("--------------- width:{:?}", width);
         let mds_matrices = create_mds_matrices::<E>(width);
 
         let (full_rounds, partial_rounds) = round_numbers(arity, &strength);
@@ -191,7 +194,7 @@ where
             &mds_matrices,
             partial_rounds,
         );
-
+        info!("--------------- compressed_round_constants:{:?}", compressed_round_constants);
         let (pre_sparse_matrix, sparse_matrixes) =
             factor_to_sparse_matrixes::<E>(mds_matrices.m.clone(), partial_rounds);
 
@@ -265,6 +268,7 @@ where
 
                 GenericArray::generate(|i| {
                     if i == 0 {
+                        // println!(" constants.domain_tag:{:?}",  constants.domain_tag);
                         constants.domain_tag
                     } else if i > preimage.len() {
                         E::Fr::zero()
@@ -279,6 +283,7 @@ where
 
                 GenericArray::generate(|i| {
                     if i == 0 {
+                        // println!(" constants.domain_tag:{:?}",  constants.domain_tag);
                         constants.domain_tag
                     } else {
                         preimage[i - 1]
@@ -343,8 +348,8 @@ where
         }
     }
 
-    pub fn hash(&mut self) -> E::Fr {
-        self.hash_in_mode(DEFAULT_HASH_MODE)
+    pub fn hash(&mut self, mode: HashMode) -> E::Fr {
+        self.hash_in_mode(mode)
     }
 
     fn apply_padding(&mut self) {
@@ -364,21 +369,39 @@ where
 
     pub fn hash_optimized_static(&mut self) -> E::Fr {
         // The first full round should use the initial constants.
+        let mut print_flag = false;
+        // if print_flag {
+        //     println!("#### optimized_static： before add_round_constants 原始输入数据");
+        //     println!("```");
+        //     println!("elements: {:?}",  self.elements);
+        //     println!("```");
+        //     println!("---");
+        // }
+
         self.add_round_constants();
-
-        for _ in 0..self.constants.half_full_rounds {
-            self.full_round(false);
+            println!("---");
+            println!("### half_full_rounds");
+        for i in 0..self.constants.half_full_rounds {
+            println!("#### half_full_rounds round: {:?}", i);
+            self.full_round(false, print_flag);
+            print_flag = false;
         }
-
-        for _ in 0..self.constants.partial_rounds {
+        println!("---");
+        println!("### partial_rounds");
+        for i in 0..self.constants.partial_rounds {
+            println!("#### partial_rounds round: {:?}", i);
             self.partial_round();
         }
-
+        println!("---");
+        println!("### All but last full round");
         // All but last full round.
-        for _ in 1..self.constants.half_full_rounds {
-            self.full_round(false);
+        for i in 1..self.constants.half_full_rounds {
+            println!("#### All_but_last_full_round round: {:?}", i);
+            self.full_round(false, print_flag );
         }
-        self.full_round(true);
+        println!("---");
+        println!("### last full round");
+        self.full_round(true, print_flag);
 
         assert_eq!(
             self.constants_offset,
@@ -387,11 +410,18 @@ where
             self.constants_offset,
             self.constants.compressed_round_constants.len()
         );
-
+        println!("---");
+        println!("### hash_optimized_static result elements[1]: {:?}", self.elements[1]);
         self.elements[1]
     }
 
-    fn full_round(&mut self, last_round: bool) {
+    fn full_round(&mut self, last_round: bool, count: bool) {
+        // if count {
+        //     println!("#### optimized_static full_round 输入数据");
+        //     println!("```");
+        //     println!("elements: {:?}", self.elements.clone());
+        //     println!("```");
+        // }
         let to_take = self.elements.len();
         let post_round_keys = self
             .constants
@@ -399,6 +429,7 @@ where
             .iter()
             .skip(self.constants_offset)
             .take(to_take);
+
 
         if !last_round {
             let needed = self.constants_offset + to_take;
@@ -409,6 +440,16 @@ where
                 needed
             );
         }
+        // if count {
+        //     println!("---");
+        //     println!("#### quintic_s_box 输入参数");
+        //     println!("```");
+        //     println!("post_round_keys: {:?}", post_round_keys);
+        //     println!("```");
+        //     println!("```");
+        //     println!("elements: {:?}", self.elements.clone());
+        //     println!("```");
+        // }
         self.elements
             .iter_mut()
             .zip(post_round_keys)
@@ -421,6 +462,13 @@ where
                 };
                 quintic_s_box::<E>(l, None, post_key);
             });
+        // if count {
+        //     println!("---");
+        //     println!("#### quintic_s_box 输出");
+        //     println!("```");
+        //     println!("elements: {:?}", self.elements.clone());
+        //     println!("```");
+        // }
         // We need this because post_round_keys will have been empty, so it didn't happen in the for_each. :(
         if last_round {
             self.elements
@@ -430,6 +478,14 @@ where
             self.constants_offset += self.elements.len();
         }
         self.round_product_mds();
+        //if count {
+        {
+            println!("---");
+            println!("#### full_round 输出参数");
+            println!("```");
+            println!("elements: {:?}", self.elements);
+            println!("```");
+        }
     }
 
     /// The partial round is the same as the full round, with the difference that we apply the S-Box only to the first (arity tag) poseidon leaf.
@@ -441,6 +497,13 @@ where
         self.constants_offset += 1;
 
         self.round_product_mds();
+        {
+            println!("---");
+            println!("#### after round_product_mds 输出参数");
+            println!("```");
+            println!("elements: {:?}", self.elements);
+            println!("```");
+        }
     }
 
     fn add_round_constants(&mut self) {
@@ -469,7 +532,13 @@ where
             {
                 let index = self.current_round - sparse_offset - 1;
                 let sparse_matrix = &self.constants.sparse_matrixes[index];
-
+                // {
+                //     println!("---");
+                //     println!("#### product_mds_with_sparse_matrix 内部参数 sparse_matrix");
+                //     println!("```");
+                //     println!("index: {:?}", index);
+                //     println!("```");
+                // }
                 self.product_mds_with_sparse_matrix(&sparse_matrix);
             } else {
                 self.product_mds();
@@ -487,12 +556,39 @@ where
 
     pub(crate) fn product_mds_with_matrix(&mut self, matrix: &Matrix<E::Fr>) {
         let mut result = GenericArray::<E::Fr, A::ConstantsSize>::generate(|_| E::Fr::zero());
-
+        // {
+        //     println!("---");
+        //     println!("#### product_mds_with_matrix 内部参数 result");
+        //     println!("```");
+        //     println!("result: {:?}", result);
+        //     println!("```");
+        // }
+        // {
+        //     println!("---");
+        //     println!("#### product_mds_with_matrix 内部参数 matrix");
+        //     println!("```");
+        //     println!("matrix: {:?}", matrix);
+        //     println!("```");
+        // }
         for (j, val) in result.iter_mut().enumerate() {
+            // if j == 1 {
+            //     panic!("fuck xjz")
+            // }
             for (i, row) in matrix.iter().enumerate() {
+                // {
+                //     println!("---");
+                //     println!("#### product_mds_with_matrix 内部参数 matrix");
+                //     println!("```");
+                //     println!(" row[{}]: {:?}", j, row[j]);
+                //     println!(" self.elements[{}]: {:?}", i, &self.elements[i]);
+                // }
                 let mut tmp = row[j];
                 tmp.mul_assign(&self.elements[i]);
                 val.add_assign(&tmp);
+                // {
+                //     println!(" val: {:?}",val);
+                //     println!("```");
+                // }
             }
         }
 
@@ -502,6 +598,13 @@ where
     // Sparse matrix in this context means one of the form, M''.
     fn product_mds_with_sparse_matrix(&mut self, sparse_matrix: &SparseMatrix<E>) {
         let mut result = GenericArray::<E::Fr, A::ConstantsSize>::generate(|_| E::Fr::zero());
+        // {
+        //     println!("---");
+        //     println!("#### product_mds_with_sparse_matrix 内部参数 result");
+        //     println!("```");
+        //     println!("result: {:?}", result);
+        //     println!("```");
+        // }
 
         // First column is dense.
         for (i, val) in sparse_matrix.w_hat.iter().enumerate() {
@@ -559,10 +662,10 @@ impl<A> BatchHasher<A> for SimplePoseidonBatchHasher<A>
 where
     A: Arity<Fr>,
 {
-    fn hash(&mut self, preimages: &[GenericArray<Fr, A>]) -> Result<Vec<Fr>, Error> {
+    fn hash(&mut self, preimages: &[GenericArray<Fr, A>], mode: HashMode) -> Result<Vec<Fr>, Error> {
         Ok(preimages
             .iter()
-            .map(|preimage| Poseidon::new_with_preimage(&preimage, &self.constants).hash())
+            .map(|preimage| Poseidon::new_with_preimage(&preimage, &self.constants).hash(mode))
             .collect())
     }
 

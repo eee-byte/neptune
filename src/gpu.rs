@@ -1,7 +1,7 @@
 use crate::cl;
 use crate::error::Error;
 use crate::hash_type::HashType;
-use crate::poseidon::PoseidonConstants;
+use crate::poseidon::{PoseidonConstants, HashMode};
 use crate::{Arity, BatchHasher, Strength, DEFAULT_STRENGTH};
 use bellperson::bls::{Bls12, Fr, FrRepr};
 use ff::{PrimeField, PrimeFieldDecodingError};
@@ -148,7 +148,7 @@ where
     A: Arity<Fr>,
 {
     /// Hash a batch of `A`-sized preimages.
-    fn hash(&mut self, preimages: &[GenericArray<Fr, A>]) -> Result<Vec<Fr>, Error> {
+    fn hash(&mut self, preimages: &[GenericArray<Fr, A>], _: HashMode) -> Result<Vec<Fr>, Error> {
         let mut ctx = self.ctx.lock().unwrap();
         let (res, state) = self.state.hash(&mut ctx, preimages)?;
         self.state = state;

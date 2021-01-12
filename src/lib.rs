@@ -10,6 +10,8 @@ use bellperson::bls::FrRepr;
 pub use error::Error;
 use ff::{Field, PrimeField, ScalarEngine};
 use generic_array::GenericArray;
+use log::info;
+use crate::poseidon::HashMode;
 
 /// Poseidon circuit
 pub mod circuit;
@@ -62,17 +64,18 @@ where
 {
     // type State;
 
-    fn hash(&mut self, preimages: &[GenericArray<Scalar, A>]) -> Result<Vec<Scalar>, Error>;
+    fn hash(&mut self, preimages: &[GenericArray<Scalar, A>], mode: HashMode) -> Result<Vec<Scalar>, Error>;
 
     fn hash_into_slice(
         &mut self,
         target_slice: &mut [Scalar],
         preimages: &[GenericArray<Scalar, A>],
+        mode: HashMode
     ) -> Result<(), Error> {
         assert_eq!(target_slice.len(), preimages.len());
         // FIXME: Account for max batch size.
 
-        Ok(target_slice.copy_from_slice(self.hash(preimages)?.as_slice()))
+        Ok(target_slice.copy_from_slice(self.hash(preimages, mode)?.as_slice()))
     }
 
     /// `max_batch_size` is advisory. Implenters of `BatchHasher` should ensure that up to the returned max hashes can
@@ -89,7 +92,7 @@ where
 // the script: https://extgit.iaik.tugraz.at/krypto/hadeshash/blob/master/code/scripts/calc_round_numbers.py
 fn round_numbers_base(arity: usize) -> (usize, usize) {
     let width = arity + 1;
-
+    info!("--------------- width:{:?}", width);
     let full_rounds = 8;
     let partial_rounds = match width {
         2 | 3 => 55,
@@ -175,6 +178,13 @@ pub(crate) fn quintic_s_box<E: ScalarEngine>(
     l.mul_assign(&tmp);
     if let Some(x) = post_add {
         l.add_assign(x);
+    }
+    {
+        println!("---");
+        println!("#### quintic_s_box 输出");
+        println!("```");
+        println!("{:?}", l);
+        println!("```");
     }
 }
 
