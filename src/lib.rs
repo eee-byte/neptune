@@ -178,6 +178,13 @@ pub(crate) fn quintic_s_box<E: ScalarEngine>(
     if let Some(x) = post_add {
         l.add_assign(x);
     }
+    {
+        println!("---");
+        println!("#### quintic_s_box 输出");
+        println!("```");
+        println!("{:?}", l);
+        println!("```");
+    }
 }
 
 #[cfg(test)]

@@ -77,7 +77,14 @@ fn bench_column_building(
     )
     .unwrap();
     info!("{}: ColumnTreeBuilder created", log_prefix);
-    info!("{:?}: builder", builder.column_constants);
+    // println!("----");
+    // println!("初始化参数 column_constants");
+    // println!("```");
+    // println!("sparse_matrixes: {:?}", builder.column_constants.sparse_matrixes);
+    // println!("```");
+    // println!("```");
+    // println!("pre_sparse_matrix: {:?}", builder.column_constants.pre_sparse_matrix);
+    // println!("```");
     // Simplify computing the expected root.
     let constant_element = match input_mode {
         InputMode::ZERO => Fr::zero(),
@@ -122,10 +129,10 @@ fn bench_column_building(
     let final_columns: Vec<_> = (0..leaves - total_columns)
         .map(|_| GenericArray::<Fr, U11>::generate(|_| constant_element))
         .collect();
-    println!("```");
-    println!("final_columns: {:?}", final_columns);
-    println!("```");
-    println!("---");
+    // println!("```");
+    // println!("final_columns: {:?}", final_columns);
+    // println!("```");
+    // println!("---");
     info!("{}: adding final column batch and building tree", log_prefix);
     let (base, res) = builder.add_final_columns(final_columns.as_slice(), mode).unwrap();
     println!("res: {:?}", res);
