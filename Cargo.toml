@@ -1,7 +1,7 @@
 [package]
 name = "neptune"
 description = "Poseidon hashing over BLS12-381 for Filecoin."
-version = "2.4.0"
+version = "2.2.0"
 authors = ["porcuquine <porcuquine@gmail.com>"]
 edition = "2018"
 license = "MIT OR Apache-2.0"
@@ -9,7 +9,7 @@ repository = "https://github.com/filecoin-project/neptune"
 
 [dependencies]
 lazy_static = "1.4.0"
-bellperson = { version = "0.12.3", default-features = false }
+bellperson = { version = "0.12", default-features = false }
 blake2s_simd = "0.5"
 byteorder = "1"
 ff = { version = "0.2.1", package = "fff" }
@@ -52,3 +52,7 @@ blst = ["bellperson/blst"]
 members = [
   "gbench",
 ]
+
+
+[patch.crates-io]
+bellperson = { path = "../bellman", default-features = false  }

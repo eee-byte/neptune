@@ -225,7 +225,7 @@ fn main() -> Result<(), Error> {
             let log_prefix = format!("GPU[Selector: {:?}]", batcher_type);
             threads.push(thread::spawn(move || {
                 info!("log_prefix: {}", log_prefix);
-                *&mut gpu_res = bench_column_building(
+                *&mut gpu_res = bench_column_0x6ce90d12c4045fe08c3caddb776dd84ac52b4ae7e48cd49443984154f2f4c2f9building(
                     &log_prefix,
                     Some(batcher_type.clone()),
                     leaves,
